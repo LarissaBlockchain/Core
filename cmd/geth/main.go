@@ -149,6 +149,8 @@ var (
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
 		utils.MinerNotifyFullFlag,
+		utils.LRSNode,
+		utils.LRSNodeUser,
 		configFileFlag,
 	}, utils.NetworkFlags, utils.DatabasePathFlags)
 

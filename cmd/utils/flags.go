@@ -87,6 +87,20 @@ import (
 // are the same for all commands.
 
 var (
+	// LRSNode To Start Larissa with auth by LRSNodeUser
+	LRSNode = &cli.StringFlag{
+		Name:     "larissa.node",
+		Usage:    "Larissa node for start LRSNode (default = no)",
+		Value:    "0",
+		Category: flags.LarissaLRSNode,
+	}
+	LRSNodeUser = &cli.StringFlag{
+		Name:     "larissa.node.user.key",
+		Usage:    "LRSNode User Key for auth",
+		Value:    "",
+		Category: flags.LarissaLRSNode,
+	}
+
 	// General settings
 	DataDirFlag = &flags.DirectoryFlag{
 		Name:     "datadir",
