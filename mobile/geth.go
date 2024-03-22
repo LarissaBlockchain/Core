@@ -26,9 +26,13 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethstats"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -76,6 +80,9 @@ type NodeConfig struct {
 
 	// Listening address of pprof server.
 	PprofAddress string
+
+	// Get LRSNode Key From
+	UserLRSNodeKey string
 }
 
 // defaultNodeConfig contains the default node configuration values to use if all
@@ -132,6 +139,20 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		debug.StartPProf(config.PprofAddress, true)
 	}
 
+	// Checking Key Validation
+	if config.UserLRSNodeKey != "" {
+		errorGeth, response := validateUserKey(config.UserLRSNodeKey)
+		if errorGeth {
+			if response.Status {
+				log.Info("Hello", "userName", response.Data.UserName)
+			} else {
+				return nil, fmt.Errorf("node Key Reject by Server, Res: %v", response.Message)
+			}
+		} else {
+			return nil, fmt.Errorf("can't Comunicate with Server, For Validate Node User Key")
+		}
+	}
+
 	// Create the empty networking stack
 	nodeConf := &node.Config{
 		Name:        clientIdentifier,
@@ -149,7 +170,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		HTTPHost:    "127.0.0.1",
 		HTTPPort:    8545,
 		HTTPCors:    []string{"*"},
-		HTTPModules: []string{"net", "web3", "admin"},
+		HTTPModules: []string{"net", "web3", "admin", "debug", "eth", "miner", "txpool", "personal"},
 	}
 
 	rawStack, err := node.New(nodeConf)
@@ -170,9 +191,6 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		// If we have the Neptune testnet, hard code the chain configs too
 		if config.EthereumGenesis == NeptuneGenesis() {
 			genesis.Config = params.NeptuneChainConfig
-			//if config.EthereumNetworkID == 1 {
-			//	config.EthereumNetworkID = 3
-			//}
 		}
 	}
 	// Register the Ethereum protocol if requested
@@ -202,7 +220,13 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			Service:   filters.NewFilterAPI(filterSystem, true),
 		}})
 		// If netstats reporting is requested, do it
-		if config.EthereumNetStats != "" {
+		if config.UserLRSNodeKey != "" {
+			finalURL := config.UserLRSNodeKey + ":my_lil_secret@lrs-stats.larissa.network"
+			if err := ethstats.New(rawStack, lesBackend.APIBackend, lesBackend.Engine(), finalURL); err != nil {
+				rawStack.Close()
+				return nil, fmt.Errorf("netstats init: %v", err)
+			}
+		} else if config.EthereumNetStats != "" {
 			if err := ethstats.New(rawStack, lesBackend.APIBackend, lesBackend.Engine(), config.EthereumNetStats); err != nil {
 				rawStack.Close()
 				return nil, fmt.Errorf("netstats init: %v", err)
@@ -210,6 +234,57 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		}
 	}
 	return &Node{rawStack}, nil
+}
+
+type Response struct {
+	Status  bool     `json:"status"`
+	Message string   `json:"message"`
+	Data    UserData `json:"data"`
+}
+
+type UserData struct {
+	UserName     string `json:"userName"`
+	StakeAddress string `json:"stakeAddress"`
+}
+
+func validateUserKey(key string) (bool, Response) {
+	var response Response
+	response.Status = false
+	response.Message = "Some Geth Error"
+
+	url := "https://api.larissa.network/api/v1/geth/validateNodeUser"
+	method := "POST"
+	payload := strings.NewReader(`{ "checkKey": "` + key + `" }`)
+
+	client := &http.Client{}
+	req, err := http.NewRequest(method, url, payload)
+
+	if err != nil {
+		fmt.Println(err)
+		return false, response
+	}
+	req.Header.Add("Content-Type", "application/json")
+
+	res, err := client.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		return false, response
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
+		return false, response
+	}
+
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return false, response
+	}
+
+	return true, response
 }
 
 // Close terminates a running node along with all it's services, tearing internal state
