@@ -665,17 +665,32 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	// Select the correct block reward based on chain progression
 	blockReward := big.NewInt(1e+18)
 
-	if (header.Number.Int64() >= 0) && (header.Number.Int64() < 2425846) { // 10 LRA
-		blockReward = big.NewInt(5e+18)
-		blockReward.Add(blockReward, big.NewInt(5e+18))
-	} else if (header.Number.Int64() >= 2425846) && (header.Number.Int64() < 4851692) { // 5 LRA
-		blockReward = big.NewInt(5e+18)
-	} else if (header.Number.Int64() >= 4851692) && (header.Number.Int64() < 7277538) { // 2.5 LRA
-		blockReward = big.NewInt(2.5e+18)
-	} else if (header.Number.Int64() >= 7277538) && (header.Number.Int64() < 9703385) { // 1.25 LRA
-		blockReward = big.NewInt(1.25e+18)
-	} else if header.Number.Int64() >= 9703385 { // 1 LRA
-		blockReward = big.NewInt(1e+18)
+	newRewardApplyBlock := big.NewInt(639675)
+
+	if header.Number.Int64() < newRewardApplyBlock.Int64() {
+		if (header.Number.Int64() >= 0) && (header.Number.Int64() < 2425846) { // 10 LRS
+			blockReward = big.NewInt(5e+18)
+			blockReward.Add(blockReward, big.NewInt(5e+18))
+		} else if (header.Number.Int64() >= 2425846) && (header.Number.Int64() < 4851692) { // 5 LRS
+			blockReward = big.NewInt(5e+18)
+		} else if (header.Number.Int64() >= 4851692) && (header.Number.Int64() < 7277538) { // 2.5 LRS
+			blockReward = big.NewInt(2.5e+18)
+		} else if (header.Number.Int64() >= 7277538) && (header.Number.Int64() < 9703385) { // 1.25 LRS
+			blockReward = big.NewInt(1.25e+18)
+		} else if header.Number.Int64() >= 9703385 { // 1 LRS
+			blockReward = big.NewInt(1e+18)
+		}
+	} else {
+		newBlockReward := big.NewInt(5e+18)
+		reductionInterval := uint64(46523) // per week 46523 Blocks
+		blockNum := new(big.Int).Sub(header.Number, newRewardApplyBlock)
+		numReductions := new(big.Int).Div(blockNum, new(big.Int).SetUint64(reductionInterval))
+		reductionFactor := big.NewInt(9938)
+		for i := new(big.Int); i.Cmp(numReductions) < 0; i.Add(i, big.NewInt(1)) {
+			newBlockReward.Mul(newBlockReward, reductionFactor)
+			newBlockReward.Div(newBlockReward, big.NewInt(10000))
+		}
+		blockReward = newBlockReward
 	}
 
 	if header.Number.Cmp(big.NewInt(2000001)) < 0 {
