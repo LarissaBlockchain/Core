@@ -46,6 +46,8 @@ var (
 	allowedFutureBlockTimeSeconds = int64(15)         // Max seconds from current time allowed for blocks, before they're considered future blocks
 
 	DevelopmentFundAddress = common.HexToAddress("0xD1e4dC5b324F5F7593c1a01c12671291bB40e10c")
+	StakeFundAddress       = common.HexToAddress("0xC512799188F81829BBe6c9F840d864BF43cA4d1A")
+	BuyBackFundAddress     = common.HexToAddress("0x166bFad2958884Bd533831115D7E7992272af8cf")
 
 	// calcDifficultyEip5133 is the difficulty adjustment algorithm as specified by EIP 5133.
 	// It offsets the bomb a total of 11.4M blocks.
@@ -666,6 +668,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	blockReward := big.NewInt(1e+18)
 
 	newRewardApplyBlock := big.NewInt(639675)
+	newStakeRewardApplyBlock := big.NewInt(1952106)
 
 	if header.Number.Int64() < newRewardApplyBlock.Int64() {
 		if (header.Number.Int64() >= 0) && (header.Number.Int64() < 2425846) { // 10 LRS
@@ -690,12 +693,38 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			newBlockReward.Mul(newBlockReward, reductionFactor)
 			newBlockReward.Div(newBlockReward, big.NewInt(10000))
 		}
-		blockReward = newBlockReward
+		minerReward := newBlockReward
+
+		if header.Number.Int64() >= newStakeRewardApplyBlock.Int64() {
+			minerReward = new(big.Int).Div(new(big.Int).Mul(newBlockReward, big.NewInt(80)), big.NewInt(100)) // 80% to the miner
+
+			remainingReward := new(big.Int).Div(new(big.Int).Mul(newBlockReward, big.NewInt(20)), big.NewInt(100)) // 20% split
+			rewardStake := new(big.Int).Div(new(big.Int).Mul(remainingReward, big.NewInt(70)), big.NewInt(100))    // 70% of remaining 20%
+			rewardBuyBack := new(big.Int).Div(new(big.Int).Mul(remainingReward, big.NewInt(30)), big.NewInt(100))  // 30% of remaining 20%
+
+			state.AddBalance(StakeFundAddress, rewardStake)
+			state.AddBalance(BuyBackFundAddress, rewardBuyBack)
+		}
+
+		blockReward = minerReward
 	}
 
 	if header.Number.Cmp(big.NewInt(2000001)) < 0 {
 		DevelopmentBlockReward := big.NewInt(1e+18)
 		state.AddBalance(DevelopmentFundAddress, DevelopmentBlockReward)
+	} else {
+		newDevReward := big.NewInt(1e+18)
+		reductionInterval := uint64(46523)
+		blockNum := new(big.Int).Sub(header.Number, big.NewInt(2000001))
+
+		numReductions := new(big.Int).Div(blockNum, new(big.Int).SetUint64(reductionInterval))
+		reductionFactor := big.NewInt(9938)
+
+		for i := big.NewInt(0); i.Cmp(numReductions) < 0; i.Add(i, big.NewInt(1)) {
+			newDevReward.Mul(newDevReward, reductionFactor)
+			newDevReward.Div(newDevReward, big.NewInt(10000))
+		}
+		state.AddBalance(DevelopmentFundAddress, newDevReward)
 	}
 
 	// Accumulate the rewards for the miner and any included uncles
