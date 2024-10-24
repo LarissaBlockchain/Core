@@ -1038,8 +1038,8 @@ func doAndroidArchive(cmdline []string) {
 		log.Fatal("Please ensure ANDROID_HOME points to your Android SDK")
 	}
 
-	// Build gomobile.
-	install := tc.Install(GOBIN, "golang.org/x/mobile/cmd/gomobile@latest", "golang.org/x/mobile/cmd/gobind@latest")
+	// Build gomobile. (Use Lib Versions:- v0.0.0-20240320162201-c76e57eead38 & Go Version:- 1.20.4)
+	install := tc.Install(GOBIN, "golang.org/x/mobile/cmd/gomobile@v0.0.0-20240320162201-c76e57eead38", "golang.org/x/mobile/cmd/gobind@v0.0.0-20240320162201-c76e57eead38")
 	install.Env = append(install.Env)
 	build.MustRun(install)
 
