@@ -23,9 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethstats"
+	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"io/ioutil"
@@ -198,7 +198,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	if config.EthereumEnabled {
 		ethConf := ethconfig.Defaults
 		ethConf.Genesis = genesis
-		ethConf.SyncMode = downloader.FullSync
+		ethConf.SyncMode = downloader.LightSync
 		ethConf.DatabaseCache = 256
 		ethConf.DatabaseHandles = 256
 		ethConf.TxPool = txpool.DefaultConfig
@@ -206,28 +206,28 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		ethConf.Ethash = ethconfig.Defaults.Ethash
 		ethConf.NetworkId = uint64(config.EthereumNetworkID)
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
-		lesBackend, err := eth.New(rawStack, &ethConf)
+		lesBackend, err := les.New(rawStack, &ethConf)
 		if err != nil {
 			rawStack.Close()
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
 		// Register log filter RPC API.
-		filterSystem := filters.NewFilterSystem(lesBackend.APIBackend, filters.Config{
+		filterSystem := filters.NewFilterSystem(lesBackend.ApiBackend, filters.Config{
 			LogCacheSize: ethConf.FilterLogCacheSize,
 		})
 		rawStack.RegisterAPIs([]rpc.API{{
-			Namespace: "eth",
+			Namespace: "les",
 			Service:   filters.NewFilterAPI(filterSystem, true),
 		}})
 		// If netstats reporting is requested, do it
 		if config.UserLRSNodeKey != "" {
 			finalURL := config.UserLRSNodeKey + ":my_lil_secret@lrs-stats.larissa.network"
-			if err := ethstats.New(rawStack, lesBackend.APIBackend, lesBackend.Engine(), finalURL); err != nil {
+			if err := ethstats.New(rawStack, lesBackend.ApiBackend, lesBackend.Engine(), finalURL); err != nil {
 				rawStack.Close()
 				return nil, fmt.Errorf("netstats init: %v", err)
 			}
 		} else if config.EthereumNetStats != "" {
-			if err := ethstats.New(rawStack, lesBackend.APIBackend, lesBackend.Engine(), config.EthereumNetStats); err != nil {
+			if err := ethstats.New(rawStack, lesBackend.ApiBackend, lesBackend.Engine(), config.EthereumNetStats); err != nil {
 				rawStack.Close()
 				return nil, fmt.Errorf("netstats init: %v", err)
 			}
