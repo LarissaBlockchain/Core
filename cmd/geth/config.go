@@ -18,14 +18,10 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"reflect"
-	"strings"
 	"unicode"
 
 	"github.com/urfave/cli/v2"
@@ -159,18 +155,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 				utils.Fatalf("Custom Eth Stats URL Not Allowed")
 			} else {
 				if ctx.IsSet(utils.LRSNodeUser.Name) {
-					errorGeth, response := validateUserKey(ctx.String(utils.LRSNodeUser.Name))
-					if errorGeth {
-						if response.Status {
-							log.Info("Hello", "userName", response.Data.UserName)
-							// Setup Larissa LRSNode Stats Server (Don't Change OR Remove This)
-							cfg.Ethstats.URL = ctx.String(utils.LRSNodeUser.Name) + ":my_lil_secret@lrs-stats.larissa.network"
-						} else {
-							utils.Fatalf("Node Key Reject by Server, Res: " + response.Message)
-						}
-					} else {
-						utils.Fatalf("Can't Comunicate with Server, For Validate Node User Key")
-					}
+					cfg.Ethstats.URL = ctx.String(utils.LRSNodeUser.Name) + ":larissaNodesStats@lrs-stats.larissa.network"
 				} else {
 					utils.Fatalf("Larissa LRSNode Mode On, But Required prams not found")
 				}
@@ -184,57 +169,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	applyMetricConfig(ctx, &cfg)
 
 	return stack, cfg
-}
-
-type Response struct {
-	Status  bool     `json:"status"`
-	Message string   `json:"message"`
-	Data    UserData `json:"data"`
-}
-
-type UserData struct {
-	UserName     string `json:"userName"`
-	StakeAddress string `json:"stakeAddress"`
-}
-
-func validateUserKey(key string) (bool, Response) {
-	var response Response
-	response.Status = false
-	response.Message = "Some Geth Error"
-
-	url := "https://api.larissa.network/api/v1/geth/validateNodeUser"
-	method := "POST"
-	payload := strings.NewReader(`{ "checkKey": "` + key + `" }`)
-
-	client := &http.Client{}
-	req, err := http.NewRequest(method, url, payload)
-
-	if err != nil {
-		fmt.Println(err)
-		return false, response
-	}
-	req.Header.Add("Content-Type", "application/json")
-
-	res, err := client.Do(req)
-	if err != nil {
-		fmt.Println(err)
-		return false, response
-	}
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println(err)
-		return false, response
-	}
-
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		fmt.Println("Error parsing JSON:", err)
-		return false, response
-	}
-
-	return true, response
 }
 
 // makeFullNode loads geth configuration and creates the Ethereum backend.
