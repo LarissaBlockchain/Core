@@ -865,6 +865,23 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
+
+	// Add blocked address check for mining
+	if w.current.header.Number.Uint64() >= misc.AddressBlockingForkBlock {
+		if err := misc.ValidateTransaction(tx, w.current.header.Number.Uint64(), w.chainConfig); err != nil {
+			return nil, err
+		}
+
+		// Check sender
+		from, err := types.Sender(w.current.signer, tx)
+		if err != nil {
+			return nil, err
+		}
+		if misc.IsAddressBlocked(from) {
+			return nil, errors.New("blocked address transaction rejected from mining")
+		}
+	}
+
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)

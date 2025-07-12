@@ -17,12 +17,14 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -331,6 +333,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}()
 	}
 
+	// Add blocked address validation after fork activation
+	if st.evm.Context.BlockNumber.Uint64() >= misc.AddressBlockingForkBlock {
+		if err := st.validateBlockedAddresses(); err != nil {
+			return nil, err
+		}
+	}
+
 	var (
 		msg              = st.msg
 		sender           = vm.AccountRef(msg.From)
@@ -424,4 +433,18 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gasRemaining
+}
+
+func (st *StateTransition) validateBlockedAddresses() error {
+	// Check if sender is blocked
+	if misc.IsAddressBlocked(st.msg.From) {
+		return errors.New("transaction from blocked address rejected")
+	}
+
+	// Check if recipient is blocked
+	if st.msg.To != nil && misc.IsAddressBlocked(*st.msg.To) {
+		return errors.New("transaction to blocked address rejected")
+	}
+
+	return nil
 }

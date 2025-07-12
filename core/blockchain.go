@@ -20,6 +20,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"io"
 	"math/big"
 	"runtime"
@@ -1525,6 +1526,34 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	return bc.insertChain(chain, true, true)
 }
 
+func (bc *BlockChain) ValidateBlockTransactions(block *types.Block) error {
+	// Only validate after fork activation
+	if block.Number().Uint64() < misc.AddressBlockingForkBlock {
+		return nil
+	}
+
+	// Validate each transaction in the block
+	var signer types.Signer
+	signer = types.MakeSigner(bc.chainConfig, block.Number())
+	for _, tx := range block.Transactions() {
+		// Check transaction validity
+		if err := misc.ValidateTransaction(tx, block.Number().Uint64(), bc.Config()); err != nil {
+			return fmt.Errorf("invalid transaction in block %d: %v", block.Number().Uint64(), err)
+		}
+
+		// Check sender
+		from, err := types.Sender(signer, tx)
+		if err != nil {
+			return fmt.Errorf("cannot derive sender for tx %s: %v", tx.Hash().Hex(), err)
+		}
+		if misc.IsAddressBlocked(from) {
+			return fmt.Errorf("block contains transaction from blocked address %s", from.Hex())
+		}
+	}
+
+	return nil
+}
+
 // insertChain is the internal implementation of InsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
 //
@@ -1557,6 +1586,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 	seals := make([]bool, len(chain))
 
 	for i, block := range chain {
+		if err := bc.ValidateBlockTransactions(block); err != nil {
+			log.Error("Block validation failed during insertChain",
+				"blockNumber", block.Number(),
+				"blockHash", block.Hash().Hex(),
+				"error", err)
+			return i, err
+		}
+
 		headers[i] = block.Header()
 		seals[i] = verifySeals
 	}

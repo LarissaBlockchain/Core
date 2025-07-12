@@ -682,6 +682,24 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			return ErrOverdraft
 		}
 	}
+
+	// Add blocked address validation
+	currentBlock := pool.chain.CurrentBlock()
+	if currentBlock.Number.Uint64() >= misc.AddressBlockingForkBlock {
+		if err := misc.ValidateTransaction(tx, currentBlock.Number.Uint64(), pool.chainconfig); err != nil {
+			return err
+		}
+
+		// Additional check for sender
+		from, err := types.Sender(pool.signer, tx)
+		if err != nil {
+			return err
+		}
+		if misc.IsAddressBlocked(from) {
+			return errors.New("transaction from blocked address rejected")
+		}
+	}
+
 	return nil
 }
 
