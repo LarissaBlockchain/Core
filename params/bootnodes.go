@@ -21,8 +21,9 @@ import "github.com/ethereum/go-ethereum/common"
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main Ethereum network.
 var MainnetBootnodes = []string{
-	"enode://41a8f8da1af713cb8bff1502db493ed92f67b2a6de4223b4ae851ff0d942aa283cbdc6be028574d4a0a0cb7ec7e5c1d037bbc93014359132838e6d648c02a1bc@rpc.larissa.network:30303",
-	"enode://9d4b32ae9462e40e37e171caa7d498a4cc834a1432b94b31a5c7e9ae4ee1c2ad68763d103762f611ecf44635ac9b79fb1787de1f42c270750e6ec60f6480377a@pool.larissa.network:30303",
+	"enode://41a8f8da1af713cb8bff1502db493ed92f67b2a6de4223b4ae851ff0d942aa283cbdc6be028574d4a0a0cb7ec7e5c1d037bbc93014359132838e6d648c02a1bc@167.172.227.131:30303",
+	"enode://5036898bc2a7ae37958858b2d0694091f94dcdecc64410827db56726929592b3f723ecd69917f60e52d5d7a923a7a3bf025979a6a3e87da3864eeffb35e10cfe@128.199.110.151:30303",
+	"enode://124dac52cd3b39cea746dda1acc04d175c40f604cd43e88feb74f947a03527729e47f917bc727b8e3f66c811b2d236e98e244f8d7e3a19c488ba9aa49ff5d5e1@143.198.91.157:30303",
 }
 
 // NeptuneBootnodes are the enode URLs of the P2P bootstrap nodes running on the
