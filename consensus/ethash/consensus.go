@@ -49,6 +49,18 @@ var (
 	StakeFundAddress       = common.HexToAddress("0xC512799188F81829BBe6c9F840d864BF43cA4d1A")
 	BuyBackFundAddress     = common.HexToAddress("0x166bFad2958884Bd533831115D7E7992272af8cf")
 
+	// Larissa Atlas Fork (block 5466756+): multipart reward split to
+	// LRSNODE_BLOCK_REWARD_PROXY, STAKING_BLOCK_REWARD_PROXY,
+	// FARMING_BLOCK_REWARD_PROXY, SILO_NODE_STAKING_PROXY_ADDRESS.
+	lrsnodeBlockRewardProxy     = common.HexToAddress("0x172220595a66225b61DFfAa79d7da0B602536C56")
+	stakingBlockRewardProxy     = common.HexToAddress("0x06C92ebB287cad1107Fc64e94DB553Cf9B648640")
+	farmingBlockRewardProxy     = common.HexToAddress("0x4539e770075A7ffa3A0592cFf5FB7083234f1c60")
+	siloNodeStakingProxyAddress = common.HexToAddress("0x877a332DA85BB247b8eA4A889E55002EbE473BF2")
+
+	// Larissa Atlas Fork: one-time migration mint at block 5466756 only.
+	LRSNodeMigration = common.HexToAddress("0x8E2a6971481cA20931B39bf167FE1D7ac210EED0")
+	siloMigration = common.HexToAddress("0xDC2708aE02071125FC4Aaff0545538F71F1DC48b")
+
 	// calcDifficultyEip5133 is the difficulty adjustment algorithm as specified by EIP 5133.
 	// It offsets the bomb a total of 11.4M blocks.
 	// Specification EIP-5133: https://eips.ethereum.org/EIPS/eip-5133
@@ -669,6 +681,8 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	newRewardApplyBlock := big.NewInt(639675)
 	newStakeRewardApplyBlock := big.NewInt(1952106)
+	// Larissa Atlas Fork: multipart reward split and one-time migration mints at this block.
+	larissaAtlasForkBlock := int64(5466756)
 
 	if header.Number.Int64() < newRewardApplyBlock.Int64() {
 		if (header.Number.Int64() >= 0) && (header.Number.Int64() < 2425846) { // 10 LRS
@@ -693,9 +707,29 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			newBlockReward.Mul(newBlockReward, reductionFactor)
 			newBlockReward.Div(newBlockReward, big.NewInt(10000))
 		}
-		minerReward := newBlockReward
+		minerReward := new(big.Int).Set(newBlockReward)
 
-		if header.Number.Int64() >= newStakeRewardApplyBlock.Int64() {
+		if header.Number.Int64() >= larissaAtlasForkBlock {
+			// 47% miner, 18% staking, 7% LRSNode, 25% Silo Node, 3% liquidity farming.
+			minerReward = new(big.Int).Div(new(big.Int).Mul(newBlockReward, big.NewInt(47)), big.NewInt(100))
+			rewardStaking := new(big.Int).Div(new(big.Int).Mul(newBlockReward, big.NewInt(18)), big.NewInt(100))
+			rewardLRSNode := new(big.Int).Div(new(big.Int).Mul(newBlockReward, big.NewInt(7)), big.NewInt(100))
+			rewardSilo := new(big.Int).Div(new(big.Int).Mul(newBlockReward, big.NewInt(25)), big.NewInt(100))
+			rewardFarming := new(big.Int).Div(new(big.Int).Mul(newBlockReward, big.NewInt(3)), big.NewInt(100))
+
+			allocated := new(big.Int).Add(minerReward, rewardStaking)
+			allocated.Add(allocated, rewardLRSNode)
+			allocated.Add(allocated, rewardSilo)
+			allocated.Add(allocated, rewardFarming)
+			if rem := new(big.Int).Sub(newBlockReward, allocated); rem.Sign() != 0 {
+				minerReward.Add(minerReward, rem)
+			}
+
+			state.AddBalance(stakingBlockRewardProxy, rewardStaking)
+			state.AddBalance(lrsnodeBlockRewardProxy, rewardLRSNode)
+			state.AddBalance(siloNodeStakingProxyAddress, rewardSilo)
+			state.AddBalance(farmingBlockRewardProxy, rewardFarming)
+		} else if header.Number.Int64() >= newStakeRewardApplyBlock.Int64() {
 			minerReward = new(big.Int).Div(new(big.Int).Mul(newBlockReward, big.NewInt(80)), big.NewInt(100)) // 80% to the miner
 
 			remainingReward := new(big.Int).Div(new(big.Int).Mul(newBlockReward, big.NewInt(20)), big.NewInt(100)) // 20% split
@@ -741,4 +775,12 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		reward.Add(reward, r)
 	}
 	state.AddBalance(header.Coinbase, reward)
+
+	// One-time mint at fork block only: 5,066,093.85 and 5,093,538.00 LRS (18 decimals).
+	if header.Number.Int64() == larissaAtlasForkBlock {
+		oneTime1, _ := new(big.Int).SetString("5066093850000000000000000", 10) // 5066093.85 * 1e18
+		oneTime2, _ := new(big.Int).SetString("5093538000000000000000000", 10) // 5093538.00 * 1e18
+		state.AddBalance(LRSNodeMigration, oneTime1)
+		state.AddBalance(siloMigration, oneTime2)
+	}
 }
